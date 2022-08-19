@@ -1,5 +1,6 @@
-from django.utils import timezone
+import uuid
 
+from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
@@ -10,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class MyUserManager(BaseUserManager):
-    def create_user(self, username: str,  password: str = None, is_staff=False, is_superuser=False):
+    def create_user(self, username: str, password: str = None, is_staff=False, is_superuser=False):
         if not username:
             raise ValueError("user must have a username")
 
@@ -24,7 +25,7 @@ class MyUserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, username: str,  password: str = None):
+    def create_superuser(self, username: str, password: str = None):
         user = self.create_user(
             username=username,
             password=password,
@@ -41,7 +42,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=150, unique=True, validators=[username_validator], error_messages={
         'unique': _("A user with that username already exists."),
     },
-    )
+                                )
     password = models.CharField(max_length=8)
     last_login = models.DateTimeField(verbose_name="last login", auto_now=True, null=True)
     is_staff = models.BooleanField(default=False)
@@ -57,3 +58,23 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.username
 
+
+class Collection(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False)
+    title = models.CharField(max_length=255, blank=True, null=True)
+    description = models.CharField(verbose_name="description", max_length=255, blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user')
+
+    def __str__(self):
+        return self.title
+
+
+class Movie(models.Model):
+    uuid = models.CharField(max_length=255, null=True)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(verbose_name="description", null=True, blank=True)
+    genres = models.CharField(verbose_name="genres", max_length=255, null=True, blank=True)
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name='collection')
+
+    def __str__(self):
+        return self.title
