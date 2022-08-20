@@ -11,7 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
 class MovieSerializer(serializers.ModelSerializer):
     class Meta:
         model = Movie
-        fields = ["uuid", "title", "description", "genres"]
+        fields = ("uuid", "title", "description", "genres")
 
 
 class CollectionSerializer(serializers.ModelSerializer):
@@ -19,4 +19,10 @@ class CollectionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Collection
-        fields = ["uuid", "title", "description", "movies"]
+        fields = ("uuid", "title", "description", "movies")
+
+
+class CollectionListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Collection
+        fields = ("title", "uuid", "description")

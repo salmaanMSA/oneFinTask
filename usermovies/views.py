@@ -15,9 +15,10 @@ from rest_framework.permissions import IsAuthenticated
 from requests.auth import HTTPBasicAuth
 from rest_framework.generics import RetrieveUpdateDestroyAPIView, CreateAPIView
 from rest_framework.views import APIView
+from django.db.models import Count
 
 from .models import User, Collection, Movie
-from .serializers import UserSerializer, CollectionSerializer, MovieSerializer
+from .serializers import UserSerializer, CollectionSerializer, MovieSerializer, CollectionListSerializer
 
 
 # Create your views here.
@@ -81,6 +82,34 @@ def requests_retry(url):
 class CollectionCreateApiView(APIView):
     authentication_classes = (JWTAuthentication, )
     permission_classes = (IsAuthenticated, )
+
+    def get(self, request):
+        user = request.user
+        collections = Collection.objects.filter(user=user)
+        collection_list = CollectionListSerializer(collections, many=True).data
+        movies = Movie.objects.filter(collection__user=user).values('genres')
+        genres = [movie['genres'] for movie in movies]
+        top3_genres = []
+
+        for i in genres:
+            if len(top3_genres) != 3:
+                if genres.count(i) > 1:
+                    top3_genres.append(i)
+                    genres.remove(i)
+        if len(top3_genres) != 3:
+            for gen in genres:
+                if gen not in top3_genres:
+                    top3_genres.append(gen)
+
+        response = {
+            "is_success": True,
+            "data": {
+                "collection": collection_list,
+                "favourite_genres": top3_genres,
+            }
+        }
+
+        return Response(response)
 
     def post(self, request):
         serializer = CollectionSerializer(data=request.data)
