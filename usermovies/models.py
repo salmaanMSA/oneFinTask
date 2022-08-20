@@ -78,3 +78,13 @@ class Movie(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class RequestCounter(models.Model):
+    no_of_request = models.IntegerField(verbose_name="Request Counter", default=0)
+
+    def save(self, *args, **kwargs):
+        if self.__class__.objects.count():
+            # set the pk to an existing value
+            self.pk = self.__class__.objects.first().pk
+        super().save(*args, **kwargs)

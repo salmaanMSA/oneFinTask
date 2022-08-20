@@ -18,29 +18,34 @@ from rest_framework.views import APIView
 from django.db.models import Count
 
 from .models import User, Collection, Movie
-from .serializers import UserSerializer, CollectionSerializer, MovieSerializer, CollectionListSerializer
+from .serializers import UserSerializer, CollectionCreateSerializer, MovieSerializer, CollectionListSerializer, \
+    CollectionRetrieveSerializer
+from moviecluster import settings
 
 
 # Create your views here.
 
 class CreateUserApiView(GenericAPIView, CreateModelMixin):
+    """
+        User Registration API
+    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
     def post(self, request, *args, **kwargs):
         self.create(request, *args, **kwargs)
         try:
+            # get user
             user = User.objects.get(username=request.data['username'])
+            # generate refresh token for user
             refresh = RefreshToken.for_user(user)
             response = {
-                'status': status.HTTP_201_CREATED,
                 'access': str(refresh.access_token)
             }
-            return Response(response)
-        except ObjectDoesNotExist as exec:
+            return Response(response, status=status.HTTP_201_CREATED)
+        except User.DoesNotExist:
             response = {
-                'status': status.HTTP_400_BAD_REQUEST,
-                'msg': str(exec)
+                'msg': "Error"
             }
             return response
 
@@ -49,14 +54,21 @@ class CreateUserApiView(GenericAPIView, CreateModelMixin):
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def movies_list(request):
+    """
+        Third party api integration
+    """
     if request.method == 'GET':
         data = requests_retry('https://demo.credy.in/api/v1/maya/movies/')
         return Response(data.json())
 
 
 def requests_retry(url):
-    username = "iNd3jDMYRKsN1pjQPMRz2nrq7N99q4Tsp9EY9cM0"
-    password = "Ne5DoTQt7p8qrgkPdtenTK8zd6MorcCR5vXZIJNfJwvfafZfcOs4reyasVYddTyXCz9hcL5FGGIVxw3q02ibnBLhblivqQTp4BIC93LZHj4OppuHQUzwugcYu7TIC5H1"
+    """
+        Api Retry Mechanism Using Recursion
+    """
+    # auth credentials
+    username = settings.USERNAME
+    password = settings.PASSWORD
     data = requests.get(url, auth=HTTPBasicAuth(username, password))
 
     if data.status_code == 200:
@@ -64,55 +76,61 @@ def requests_retry(url):
     return requests_retry(url)  # Retry Request Recursively
 
 
-# class CollectionCreateApiView(CreateAPIView):
-#     queryset = Collection.objects.all()
-#     serializer_class = CollectionSerializer
-#     authentication_classes = (JWTAuthentication, )
-#     permission_classes = (IsAuthenticated, )
+class CollectionApiView(APIView):
+    """
+        CRUD Operation - Collections
+    """
+    authentication_classes = (JWTAuthentication,)
+    permission_classes = (IsAuthenticated,)
 
-# def perform_create(self, serializer):
-#     serializer.save()
-
-# def create(self, request, *args, **kwargs):
-#     response = super().create(request, *args, **kwargs)
-#     return Response({
-#         'collection_uuid': response.data['uuid']
-#     })
-
-class CollectionCreateApiView(APIView):
-    authentication_classes = (JWTAuthentication, )
-    permission_classes = (IsAuthenticated, )
-
-    def get(self, request):
+    def get(self, request, uuid=None):
         user = request.user
-        collections = Collection.objects.filter(user=user)
-        collection_list = CollectionListSerializer(collections, many=True).data
-        movies = Movie.objects.filter(collection__user=user).values('genres')
-        genres = [movie['genres'] for movie in movies]
-        top3_genres = []
+        # get user collections
+        if uuid is None:
+            collections = Collection.objects.filter(user=user)
+            collection_list = CollectionListSerializer(collections, many=True).data
+            # query for top3 genres based on movie collections
+            movies = Movie.objects.values("genres").annotate(count=Count('id')).filter(collection__user=user).order_by(
+                '-count')
+            genres = [movie['genres'] for movie in movies]
+            top3_genres = []
 
-        for i in genres:
+            for i in genres:
+                if len(top3_genres) != 3:
+                    if genres.count(i) > 1:
+                        top3_genres.append(i)
+                        genres.remove(i)
             if len(top3_genres) != 3:
-                if genres.count(i) > 1:
-                    top3_genres.append(i)
-                    genres.remove(i)
-        if len(top3_genres) != 3:
-            for gen in genres:
-                if gen not in top3_genres:
-                    top3_genres.append(gen)
+                for gen in genres:
+                    if len(top3_genres) != 3:
+                        if gen not in top3_genres:
+                            top3_genres.append(gen)
 
-        response = {
-            "is_success": True,
-            "data": {
-                "collection": collection_list,
-                "favourite_genres": top3_genres,
+            response = {
+                "is_success": True,
+                "data": {
+                    "collection": collection_list,
+                    "favourite_genres": top3_genres,
+                }
             }
-        }
 
-        return Response(response)
+            return Response(response, status=status.HTTP_200_OK)
+
+        else:
+            # Retrieve specific collections
+            collection = Collection.objects.filter(user=user, uuid=uuid)
+            if collection:
+                serializer = CollectionRetrieveSerializer(collection, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                response = {
+                    "error": "Wrong Collection ID"
+                }
+                return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
-        serializer = CollectionSerializer(data=request.data)
+        # create new collections
+        serializer = CollectionCreateSerializer(data=request.data)
         if serializer.is_valid():
             validated_data = serializer.validated_data
             collection = Collection.objects.create(title=validated_data['title'],
@@ -130,4 +148,69 @@ class CollectionCreateApiView(APIView):
                 'collection_uuid': collection.uuid
             }
 
-            return Response(response)
+            return Response(response, status=status.HTTP_201_CREATED)
+
+        else:
+            response = {
+                "error": serializer.errors
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, uuid):
+        try:
+            collection = Collection.objects.get(uuid__exact=uuid)
+            serializer = CollectionCreateSerializer(collection, data=request.data)
+            print(request.data)
+            if serializer.is_valid():
+                validated_data = serializer.validated_data
+                collection.title = validated_data['title']
+                collection.description = validated_data['description']
+                collection.save()
+
+                for data in validated_data['movies']:
+                    try:
+                        movie = Movie.objects.get(uuid__exact=data['uuid'], collection=collection)
+                        movie.title = data['title']
+                        movie.uuid = data['uuid']
+                        movie.description = data['description']
+                        movie.save()
+
+                    except Movie.DoesNotExist:
+                        new_movie = Movie.objects.create(uuid=data['uuid'], title=data['title'],
+                                                         description=data['description'], collection=collection)
+
+                response = {
+                    "is_Success": True,
+                    "Msg": "Collection Updated Successfully"
+                }
+
+                return Response(response, status=status.HTTP_200_OK)
+
+            else:
+                response = {
+                    "error": serializer.errors
+                }
+                return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+        except Collection.DoesNotExist:
+            response = {
+                "error": "Invalid Collection UUID"
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, uuid):
+        try:
+            collection = Collection.objects.get(uuid=uuid)
+            collection.delete()
+            response = {
+                "Msg": "Collection Deleted Successfully"
+            }
+            return Response(response, status=status.HTTP_204_NO_CONTENT)
+
+        except Collection.DoesNotExist:
+            response = {
+                "Msg": "Invalid Collection UUID"
+            }
+            return Response(response, status=status.HTTP_204_NO_CONTENT)
+
+
