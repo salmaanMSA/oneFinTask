@@ -17,7 +17,7 @@ from rest_framework.generics import RetrieveUpdateDestroyAPIView, CreateAPIView
 from rest_framework.views import APIView
 from django.db.models import Count
 
-from .models import User, Collection, Movie
+from .models import User, Collection, Movie, RequestCounter
 from .serializers import UserSerializer, CollectionCreateSerializer, MovieSerializer, CollectionListSerializer, \
     CollectionRetrieveSerializer
 from moviecluster import settings
@@ -213,4 +213,36 @@ class CollectionApiView(APIView):
             }
             return Response(response, status=status.HTTP_204_NO_CONTENT)
 
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def get_request_count(request):
+    """
+        Get number of request served by server
+    """
+    if request.method == 'GET':
+        request_count = RequestCounter.objects.get().no_of_request
+        response = {
+            "requests": request_count
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def reset_request_count(request):
+    """
+        Reset Request counter
+    """
+    if request.method == 'POST':
+        req_obj = RequestCounter.objects.get()
+        req_obj.no_of_request = 0
+        req_obj.save()
+
+        response = {
+            "message": "request count reset successfully"
+        }
+        return Response(response, status=status.HTTP_200_OK)
 
