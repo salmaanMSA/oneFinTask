@@ -8,6 +8,7 @@ from .models import User, Collection, Movie, RequestCounter
 class CollectionAdmin(admin.ModelAdmin):
     list_display = ("uuid", "title", "description", "user")
 
+
 @admin.register(RequestCounter)
 class RequestCounterAdmin(admin.ModelAdmin):
     list_display = ("id", "no_of_request", "last_update")
