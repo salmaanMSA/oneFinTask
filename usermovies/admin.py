@@ -10,7 +10,7 @@ class CollectionAdmin(admin.ModelAdmin):
 
 @admin.register(RequestCounter)
 class RequestCounterAdmin(admin.ModelAdmin):
-    list_display = ("id", "no_of_request")
+    list_display = ("id", "no_of_request", "last_update")
 
 
 admin.site.register(User)

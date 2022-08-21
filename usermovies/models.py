@@ -11,7 +11,13 @@ from django.utils.translation import gettext_lazy as _
 
 
 class MyUserManager(BaseUserManager):
+    """
+        Custom User Manager
+    """
     def create_user(self, username: str, password: str = None, is_staff=False, is_superuser=False):
+        """
+            Creating User
+        """
         if not username:
             raise ValueError("user must have a username")
 
@@ -26,6 +32,9 @@ class MyUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username: str, password: str = None):
+        """
+            Create Super user
+        """
         user = self.create_user(
             username=username,
             password=password,
@@ -38,7 +47,10 @@ class MyUserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    username_validator = UnicodeUsernameValidator()
+    """
+        Custom User
+    """
+    username_validator = UnicodeUsernameValidator()  # username validator
     username = models.CharField(max_length=150, unique=True, validators=[username_validator], error_messages={
         'unique': _("A user with that username already exists."),
     },
@@ -60,6 +72,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class Collection(models.Model):
+    """
+        Collection Model
+    """
     uuid = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False)
     title = models.CharField(max_length=255, blank=True, null=True)
     description = models.CharField(verbose_name="description", max_length=255, blank=True, null=True)
@@ -70,6 +85,9 @@ class Collection(models.Model):
 
 
 class Movie(models.Model):
+    """
+        Movie Model
+    """
     uuid = models.CharField(max_length=255, null=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(verbose_name="description", null=True, blank=True)
@@ -82,6 +100,7 @@ class Movie(models.Model):
 
 class RequestCounter(models.Model):
     no_of_request = models.IntegerField(verbose_name="Request Counter", default=0)
+    last_update = models.DateTimeField(verbose_name="last update", auto_now=True, null=True)
 
     def save(self, *args, **kwargs):
         if self.__class__.objects.count():

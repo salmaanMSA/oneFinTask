@@ -3,36 +3,47 @@ from rest_framework import serializers
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """
+        User Serializer
+    """
     class Meta:
         model = User
         fields = ("username", "password")
 
 
 class MovieSerializer(serializers.ModelSerializer):
+    """
+        Serializer for Movie model
+    """
     class Meta:
         model = Movie
         fields = ("uuid", "title", "description", "genres")
 
 
 class CollectionCreateSerializer(serializers.ModelSerializer):
-    movies = MovieSerializer(many=True)
+    """
+        Serializer for creating collection
+    """
+    movies = MovieSerializer(many=True)  # nested serializer
 
     class Meta:
         model = Collection
         fields = ("uuid", "title", "description", "movies")
 
-    def update(self, instance, validated_data):
-        instance.title = validated_data.get('title', instance.title)
-        instance.description = validated_data.get('description', instance.description)
-        instance.save()
 
 class CollectionListSerializer(serializers.ModelSerializer):
+    """
+        Serializer for listing collections
+    """
     class Meta:
         model = Collection
         fields = ("title", "uuid", "description")
 
 
 class CollectionRetrieveSerializer(serializers.ModelSerializer):
+    """
+        Serializer for Collection Retrieve
+    """
     movies = serializers.SerializerMethodField()
 
     def get_movies(self, obj):

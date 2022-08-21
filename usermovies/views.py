@@ -40,14 +40,15 @@ class CreateUserApiView(GenericAPIView, CreateModelMixin):
             # generate refresh token for user
             refresh = RefreshToken.for_user(user)
             response = {
-                'access': str(refresh.access_token)
+                'access': str(refresh.access_token)  # return access token
             }
             return Response(response, status=status.HTTP_201_CREATED)
         except User.DoesNotExist:
+            # if user does not exists
             response = {
-                'msg': "Error"
+                'msg': "Error"  # return error response
             }
-            return response
+            return Response(response, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['GET'])
@@ -57,23 +58,24 @@ def movies_list(request):
     """
         Third party api integration
     """
-    if request.method == 'GET':
-        data = requests_retry('https://demo.credy.in/api/v1/maya/movies/')
-        return Response(data.json())
-
-
-def requests_retry(url):
-    """
-        Api Retry Mechanism Using Recursion
-    """
     # auth credentials
     username = settings.USERNAME
     password = settings.PASSWORD
+
+    if request.method == 'GET':
+        data = requests_retry('https://demo.credy.in/api/v1/maya/movies/', username, password)
+        return Response(data.json())
+
+
+def requests_retry(url, username, password):
+    """
+        Api Retry Mechanism Using Recursion
+    """
     data = requests.get(url, auth=HTTPBasicAuth(username, password))
 
     if data.status_code == 200:
         return data
-    return requests_retry(url)  # Retry Request Recursively
+    return requests_retry(url, username, password)  # Retry Request Recursively
 
 
 class CollectionApiView(APIView):
@@ -131,44 +133,55 @@ class CollectionApiView(APIView):
     def post(self, request):
         # create new collections
         serializer = CollectionCreateSerializer(data=request.data)
+        # check serializer is valid
         if serializer.is_valid():
+            # get validated data from serializer
             validated_data = serializer.validated_data
+            # create a new collection obj with validated data
             collection = Collection.objects.create(title=validated_data['title'],
                                                    description=validated_data['description'],
                                                    user=request.user)
+
+            # creating movies obj for movies added to collection
             movie_list = []
             for data in validated_data['movies']:
                 movie_list.append(
                     Movie(uuid=data['uuid'], title=data['title'], description=data['description'],
                           genres=data['genres'], collection=collection)
                 )
+            # using bulk create for obj creation
             Movie.objects.bulk_create(movie_list)
 
             response = {
-                'collection_uuid': collection.uuid
+                'collection_uuid': collection.uuid  # return collection uuid
             }
 
             return Response(response, status=status.HTTP_201_CREATED)
 
         else:
+            # if serializer is not valid:
             response = {
-                "error": serializer.errors
+                "error": serializer.errors  # return serializer errors
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request, uuid):
         try:
+            # get collection obj fromm uuid
             collection = Collection.objects.get(uuid__exact=uuid)
             serializer = CollectionCreateSerializer(collection, data=request.data)
-            print(request.data)
+            # check serializer is valid
             if serializer.is_valid():
                 validated_data = serializer.validated_data
+                # update the collection record
                 collection.title = validated_data['title']
                 collection.description = validated_data['description']
                 collection.save()
 
+                # updating movie records
                 for data in validated_data['movies']:
                     try:
+                        # if movie exists - update
                         movie = Movie.objects.get(uuid__exact=data['uuid'], collection=collection)
                         movie.title = data['title']
                         movie.uuid = data['uuid']
@@ -176,6 +189,7 @@ class CollectionApiView(APIView):
                         movie.save()
 
                     except Movie.DoesNotExist:
+                        # if movie not exists - create
                         new_movie = Movie.objects.create(uuid=data['uuid'], title=data['title'],
                                                          description=data['description'], collection=collection)
 
@@ -187,20 +201,24 @@ class CollectionApiView(APIView):
                 return Response(response, status=status.HTTP_200_OK)
 
             else:
+                # if serializer is not valid
                 response = {
-                    "error": serializer.errors
+                    "error": serializer.errors  # return serializer error
                 }
                 return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
         except Collection.DoesNotExist:
+            # if collection uuid not exists
             response = {
                 "error": "Invalid Collection UUID"
             }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(response, status=status.HTTP_404_NOT_FOUND)
 
     def delete(self, request, uuid):
         try:
+            # get collection obj with uuid
             collection = Collection.objects.get(uuid=uuid)
+            # delete the obj
             collection.delete()
             response = {
                 "Msg": "Collection Deleted Successfully"
@@ -208,10 +226,11 @@ class CollectionApiView(APIView):
             return Response(response, status=status.HTTP_204_NO_CONTENT)
 
         except Collection.DoesNotExist:
+            # if collection uuid not exists
             response = {
                 "Msg": "Invalid Collection UUID"
             }
-            return Response(response, status=status.HTTP_204_NO_CONTENT)
+            return Response(response, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['GET'])
@@ -245,4 +264,3 @@ def reset_request_count(request):
             "message": "request count reset successfully"
         }
         return Response(response, status=status.HTTP_200_OK)
-
